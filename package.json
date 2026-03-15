@@ -1,6 +1,6 @@
 {
-  "name": "wxt-react-starter",
-  "description": "manifest.json description",
+  "name": "focus-mode",
+  "description": "Focus Mode - Block websites to stay focused",
   "private": true,
   "version": "0.0.0",
   "type": "module",

@@ -1,0 +1,16 @@
+{
+  "name": "Default Prompts",
+  "description": "The built-in reflection prompts",
+  "prompts": [
+    "What's one thing you're grateful for right now?",
+    "What's the most important thing you could do in the next 30 minutes?",
+    "Who is someone that made your day better recently?",
+    "What's something small that brought you joy today?",
+    "What's one goal you're working towards right now?",
+    "What would make today a great day?",
+    "What's a recent accomplishment you're proud of?",
+    "What's something kind you could do for someone today?",
+    "What's one thing you'd like to learn this week?",
+    "What matters most to you right now?"
+  ]
+}

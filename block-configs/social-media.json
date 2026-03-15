@@ -1,0 +1,16 @@
+{
+  "name": "Social Media",
+  "description": "Block major social media platforms",
+  "rules": [
+    "x.com",
+    "facebook.com",
+    "instagram.com",
+    "reddit.com",
+    "tiktok.com",
+    "snapchat.com",
+    "threads.net",
+    "bsky.app",
+    "mastodon.social",
+    "linkedin.com/feed"
+  ]
+}

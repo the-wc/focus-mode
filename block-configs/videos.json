@@ -1,0 +1,16 @@
+{
+  "name": "Videos",
+  "description": "Block video and streaming platforms",
+  "rules": [
+    "youtube.com",
+    "netflix.com",
+    "twitch.tv",
+    "hulu.com",
+    "disneyplus.com",
+    "max.com",
+    "peacocktv.com",
+    "crunchyroll.com",
+    "dailymotion.com",
+    "vimeo.com"
+  ]
+}
