@@ -44,7 +44,7 @@
 ### Install from source
 
 ```sh
-git clone <repo-url>
+git clone git@github.com:the-wc/focus-mode.git
 cd focus-mode
 pnpm install
 pnpm build
