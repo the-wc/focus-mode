@@ -17,6 +17,10 @@
 
 ---
 
+<p align="center">
+  <img src="preview.png" alt="Focus Mode Preview" width="680" />
+</p>
+
 ## How It Works
 
 1. **Add sites to block** -- from the popup or the dashboard
