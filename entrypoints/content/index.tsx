@@ -9,8 +9,12 @@ export default defineContentScript({
   cssInjectionMode: "ui",
   runAt: "document_start",
   async main(ctx) {
-    const currentUrl = window.location.hostname.replace(/^www\./, "") + window.location.pathname;
-    const currentHostname = window.location.hostname.replace(/^www\./, "");
+    let currentUrl = window.location.hostname.replace(/^www\./, "") + window.location.pathname;
+    let currentHostname = window.location.hostname.replace(/^www\./, "");
+
+    function getCurrentUrl() {
+      return window.location.hostname.replace(/^www\./, "") + window.location.pathname;
+    }
 
     // Immediately hide page to prevent flash — works even before <head> exists
     const hideStyle = document.createElement("style");
@@ -127,12 +131,22 @@ export default defineContentScript({
     }
 
     async function checkAndBlock() {
+      // Re-read URL in case of SPA navigation
+      currentUrl = getCurrentUrl();
+      currentHostname = window.location.hostname.replace(/^www\./, "");
+
       const rules = await blockRulesStorage.getValue();
       const rule = findMatchingRule(currentUrl, rules);
       if (!rule) return;
 
       // If there's an active session for this rule, allow through
       if (await hasActiveSession(rule)) return;
+
+      // Re-attach hide style if it was removed (e.g. after SPA navigation from an allowed page)
+      if (!hideStyle.parentNode) {
+        hideStyle.textContent = "html { visibility: hidden !important; }";
+        document.documentElement.appendChild(hideStyle);
+      }
 
       if (rule.accessLimit > 0) {
         const exhausted = await hasExhaustedLimit(rule);
@@ -157,5 +171,42 @@ export default defineContentScript({
     blockRulesStorage.watch(() => {
       if (!ui) checkAndBlock();
     });
+
+    // Detect SPA navigations (pushState/replaceState/popstate) and re-check blocking
+    async function onUrlChange() {
+      const newUrl = getCurrentUrl();
+      if (newUrl === currentUrl) return;
+      currentUrl = newUrl;
+      currentHostname = window.location.hostname.replace(/^www\./, "");
+
+      // If navigating to an allowed URL, remove the overlay
+      const rules = await blockRulesStorage.getValue();
+      const rule = findMatchingRule(currentUrl, rules);
+      if (!rule && ui) {
+        hideStyle.remove();
+        ui.remove();
+        ui = null;
+        return;
+      }
+
+      if (rule) {
+        // Remove existing overlay so checkAndBlock can show a fresh one for the new URL
+        if (ui) {
+          ui.remove();
+          ui = null;
+        }
+        checkAndBlock();
+      }
+    }
+
+    // Listen for URL change messages from the background script (handles SPA navigations)
+    browser.runtime.onMessage.addListener((message) => {
+      if (message?.type === "url-changed") {
+        onUrlChange();
+      }
+    });
+
+    // Also handle back/forward navigation
+    window.addEventListener("popstate", onUrlChange);
   },
 });
