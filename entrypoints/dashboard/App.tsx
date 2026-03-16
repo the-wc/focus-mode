@@ -106,7 +106,7 @@ function App() {
   }
 
   async function addRule(pattern: string, source?: string) {
-    const clean = pattern.replace(/^www\./, "").trim().toLowerCase();
+    const clean = pattern.replace(/^https?:\/\//, "").replace(/^www\./, "").trim().toLowerCase();
     if (!clean) return;
     const current = await blockRulesStorage.getValue();
     if (current.some((r) => r.pattern === clean)) return;
@@ -286,14 +286,15 @@ function getHeatLevel(count: number): number {
 
 function BlockHeatmap({ events }: { events: BlockEvent[] }) {
   const [isDark, setIsDark] = useState(
-    window.matchMedia("(prefers-color-scheme: dark)").matches,
+    document.documentElement.classList.contains("dark"),
   );
 
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   const { weeks, monthLabels, totalBlocks } = useMemo(() => {
@@ -965,7 +966,7 @@ function RuleRow({
       {/* Row 1: pattern + badges + menu */}
       <div className="flex items-center gap-2">
         <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-          {rule.pattern}
+          {rule.pattern.replace(/^https?:\/\//, "")}
         </code>
         {rule.isException && (
           <span className="text-[10px] text-green-600 dark:text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">

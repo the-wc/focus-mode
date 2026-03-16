@@ -11,8 +11,8 @@ import type { BlockRule } from "./storage";
  *   "*.example.com/app/*"     — subdomain wildcard + path wildcard
  */
 function patternToRegex(pattern: string): RegExp {
-  // Remove protocol if someone typed it
-  let p = pattern.replace(/^https?:\/\//, "");
+  // Remove protocol, leading www., and trailing slash if someone typed it
+  let p = pattern.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "");
 
   // Split into host and path parts
   const slashIdx = p.indexOf("/");

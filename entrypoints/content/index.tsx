@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import { blockRulesStorage, blockEventsStorage, periodToMs, type BlockRule } from "@/lib/storage";
+import { blockRulesStorage, blockEventsStorage, activeSessionsStorage, periodToMs, type BlockRule } from "@/lib/storage";
 import { findMatchingRule } from "@/lib/matching";
 import App from "./App";
 import "./style.css";
@@ -52,10 +52,33 @@ export default defineContentScript({
       });
     }
 
-    async function showOverlay(rule: BlockRule) {
+    async function hasActiveSession(rule: BlockRule): Promise<boolean> {
+      const sessions = await activeSessionsStorage.getValue();
+      return sessions.some((s) => s.ruleId === rule.id && s.expiresAt > Date.now());
+    }
+
+    async function grantSession(rule: BlockRule) {
+      const browseSec = rule.browseSeconds ?? 0;
+      if (browseSec <= 0) return;
+      const sessions = await activeSessionsStorage.getValue();
+      // Prune expired sessions and add the new one
+      const now = Date.now();
+      const active = sessions.filter((s) => s.expiresAt > now);
+      active.push({ ruleId: rule.id, expiresAt: now + browseSec * 1000 });
+      await activeSessionsStorage.setValue(active);
+    }
+
+    async function revokeSession(rule: BlockRule) {
+      const sessions = await activeSessionsStorage.getValue();
+      await activeSessionsStorage.setValue(sessions.filter((s) => s.ruleId !== rule.id));
+    }
+
+    async function showOverlay(rule: BlockRule, mode: "gate" | "exhausted" | "blocked") {
       if (ui) return;
 
-      await recordBlock(rule);
+      if (mode !== "gate") {
+        await recordBlock(rule);
+      }
       await waitForBody();
 
       // Switch from full hide to just overflow hidden — overlay covers the rest
@@ -71,8 +94,14 @@ export default defineContentScript({
             <App
               hostname={currentHostname}
               timerSeconds={rule.timerSeconds}
-              canRequestAccess={rule.accessLimit > 0}
-              onDismiss={() => {
+              canRequestAccess={mode === "gate"}
+              sessionsExhausted={mode === "exhausted"}
+              onDismiss={async () => {
+                if (mode === "gate") {
+                  await recordBlock(rule);
+                  await grantSession(rule);
+                }
+
                 hideStyle.remove();
                 ui?.remove();
                 ui = null;
@@ -80,8 +109,9 @@ export default defineContentScript({
                 // If browse time is configured, re-block after it expires
                 const browseSec = rule.browseSeconds ?? 0;
                 if (browseSec > 0) {
-                  setTimeout(() => {
-                    showOverlay(rule);
+                  setTimeout(async () => {
+                    await revokeSession(rule);
+                    showOverlay(rule, "blocked");
                   }, browseSec * 1000);
                 }
               }}
@@ -101,12 +131,20 @@ export default defineContentScript({
       const rule = findMatchingRule(currentUrl, rules);
       if (!rule) return;
 
+      // If there's an active session for this rule, allow through
+      if (await hasActiveSession(rule)) return;
+
       if (rule.accessLimit > 0) {
         const exhausted = await hasExhaustedLimit(rule);
-        if (!exhausted) return;
+        if (!exhausted) {
+          await showOverlay(rule, "gate");
+          return;
+        }
+        await showOverlay(rule, "exhausted");
+        return;
       }
 
-      await showOverlay(rule);
+      await showOverlay(rule, "blocked");
     }
 
     await checkAndBlock();

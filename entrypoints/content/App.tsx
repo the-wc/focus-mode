@@ -5,11 +5,13 @@ export default function App({
   hostname,
   timerSeconds,
   canRequestAccess,
+  sessionsExhausted,
   onDismiss,
 }: {
   hostname: string;
   timerSeconds: number;
   canRequestAccess: boolean;
+  sessionsExhausted: boolean;
   onDismiss: () => void;
 }) {
   const [isDark, setIsDark] = useState(
@@ -38,6 +40,7 @@ export default function App({
         hostname={hostname}
         timerSeconds={timerSeconds}
         canRequestAccess={canRequestAccess}
+        sessionsExhausted={sessionsExhausted}
         onDismiss={onDismiss}
       />
     </div>

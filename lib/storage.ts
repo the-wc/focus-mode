@@ -98,6 +98,16 @@ export const blockEventsStorage = storage.defineItem<BlockEvent[]>(
   { fallback: [] },
 );
 
+export interface ActiveSession {
+  ruleId: string;
+  expiresAt: number;
+}
+
+export const activeSessionsStorage = storage.defineItem<ActiveSession[]>(
+  "local:activeSessions",
+  { fallback: [] },
+);
+
 export const promptConfigStorage = storage.defineItem<PromptConfig>(
   "local:promptConfig",
   { fallback: { prompts: [], includeDefaults: true } },
@@ -108,7 +118,7 @@ export function extractDomain(pattern: string): string {
   let p = pattern.replace(/^https?:\/\//, "");
   p = p.replace(/^\*\./, "");
   const host = p.split("/")[0];
-  return host.toLowerCase();
+  return host.replace(/^www\./, "").toLowerCase();
 }
 
 /** Generate a short random id */
