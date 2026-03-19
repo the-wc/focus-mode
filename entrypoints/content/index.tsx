@@ -80,13 +80,21 @@ export default defineContentScript({
     async function showOverlay(rule: BlockRule, mode: "gate" | "exhausted" | "blocked") {
       if (ui) return;
 
-      if (mode !== "gate") {
-        await recordBlock(rule);
-      }
       await waitForBody();
 
       // Switch from full hide to just overflow hidden — overlay covers the rest
       hideStyle.textContent = "html { overflow: hidden !important; }";
+
+      // Count sessions used in the current period
+      let sessionsUsed = 0;
+      if (rule.accessLimit > 0) {
+        const events = await blockEventsStorage.getValue();
+        const periodMs = periodToMs(rule.limitPeriod);
+        const cutoff = Date.now() - periodMs;
+        sessionsUsed = events.filter(
+          (e) => e.ruleId === rule.id && e.timestamp >= cutoff,
+        ).length;
+      }
 
       ui = await createShadowRootUi(ctx, {
         name: "focus-mode-overlay",
@@ -100,6 +108,8 @@ export default defineContentScript({
               timerSeconds={rule.timerSeconds}
               canRequestAccess={mode === "gate"}
               sessionsExhausted={mode === "exhausted"}
+              sessionsUsed={sessionsUsed}
+              sessionsLimit={rule.accessLimit}
               onDismiss={async () => {
                 if (mode === "gate") {
                   await recordBlock(rule);

@@ -7,12 +7,16 @@ export function BlockedOverlay({
   timerSeconds,
   canRequestAccess,
   sessionsExhausted,
+  sessionsUsed,
+  sessionsLimit,
   onDismiss,
 }: {
   hostname: string;
   timerSeconds: number;
   canRequestAccess: boolean;
   sessionsExhausted: boolean;
+  sessionsUsed: number;
+  sessionsLimit: number;
   onDismiss: () => void;
 }) {
   const [phase, setPhase] = useState<"blocked" | "timer">("blocked");
@@ -55,7 +59,12 @@ export function BlockedOverlay({
           )}
           {sessionsExhausted && (
             <p className="text-xs text-muted-foreground">
-              You've already used all your sessions for this site today.
+              You've already used all your sessions for this site.
+            </p>
+          )}
+          {sessionsLimit > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Sessions used: {sessionsUsed} / {sessionsLimit}
             </p>
           )}
         </div>
