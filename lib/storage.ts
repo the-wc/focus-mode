@@ -33,17 +33,57 @@ export function secondsToTimer(seconds: number): { value: number; unit: TimerUni
   return { value: seconds, unit: "s" };
 }
 
-/** Get the duration in ms for a limit period */
-export function periodToMs(period: LimitPeriod): number {
-  const day = 24 * 60 * 60 * 1000;
+/** Get the start-of-period timestamp for a limit period (calendar-based reset) */
+export function periodStart(period: LimitPeriod): number {
+  const now = new Date();
   switch (period) {
-    case "day": return day;
-    case "week": return 7 * day;
-    case "2weeks": return 14 * day;
-    case "month": return 30 * day;
-    case "3months": return 90 * day;
-    case "6months": return 180 * day;
-    case "year": return 365 * day;
+    case "day": {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return d.getTime();
+    }
+    case "week": {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Reset on Monday (getDay(): 0=Sun, 1=Mon, ...)
+      const dayOfWeek = d.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // days since Monday
+      d.setDate(d.getDate() - diff);
+      return d.getTime();
+    }
+    case "2weeks": {
+      // Use ISO week number, reset every even week on Monday
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dayOfWeek = d.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      d.setDate(d.getDate() - diff); // this Monday
+      // Compute ISO week number
+      const jan4 = new Date(d.getFullYear(), 0, 4);
+      const startOfWeek1 = new Date(jan4);
+      const jan4Day = jan4.getDay() || 7;
+      startOfWeek1.setDate(jan4.getDate() - (jan4Day - 1));
+      const weekNum = Math.ceil(((d.getTime() - startOfWeek1.getTime()) / 86400000 + 1) / 7);
+      if (weekNum % 2 === 0) {
+        // Even week — period started this Monday
+        return d.getTime();
+      } else {
+        // Odd week — period started last Monday
+        d.setDate(d.getDate() - 7);
+        return d.getTime();
+      }
+    }
+    case "month": {
+      return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    }
+    case "3months": {
+      const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+      return new Date(now.getFullYear(), quarterMonth, 1).getTime();
+    }
+    case "6months": {
+      const halfMonth = now.getMonth() < 6 ? 0 : 6;
+      return new Date(now.getFullYear(), halfMonth, 1).getTime();
+    }
+    case "year": {
+      return new Date(now.getFullYear(), 0, 1).getTime();
+    }
   }
 }
 

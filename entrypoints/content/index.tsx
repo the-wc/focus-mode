@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import { blockRulesStorage, blockEventsStorage, activeSessionsStorage, periodToMs, type BlockRule } from "@/lib/storage";
+import { blockRulesStorage, blockEventsStorage, activeSessionsStorage, periodStart, type BlockRule } from "@/lib/storage";
 import { findMatchingRule } from "@/lib/matching";
 import App from "./App";
 import "./style.css";
@@ -26,8 +26,7 @@ export default defineContentScript({
     async function hasExhaustedLimit(rule: BlockRule): Promise<boolean> {
       if (rule.accessLimit === 0) return true;
       const events = await blockEventsStorage.getValue();
-      const periodMs = periodToMs(rule.limitPeriod);
-      const cutoff = Date.now() - periodMs;
+      const cutoff = periodStart(rule.limitPeriod);
       const count = events.filter(
         (e) => e.ruleId === rule.id && e.timestamp >= cutoff,
       ).length;
@@ -89,8 +88,7 @@ export default defineContentScript({
       let sessionsUsed = 0;
       if (rule.accessLimit > 0) {
         const events = await blockEventsStorage.getValue();
-        const periodMs = periodToMs(rule.limitPeriod);
-        const cutoff = Date.now() - periodMs;
+        const cutoff = periodStart(rule.limitPeriod);
         sessionsUsed = events.filter(
           (e) => e.ruleId === rule.id && e.timestamp >= cutoff,
         ).length;
