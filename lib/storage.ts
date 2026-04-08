@@ -153,12 +153,42 @@ export const promptConfigStorage = storage.defineItem<PromptConfig>(
   { fallback: { prompts: [], includeDefaults: true } },
 );
 
+/** Strip www. prefix from a pattern (for normalization on save) */
+export function normalizePattern(pattern: string): string {
+  return pattern.replace(/^(https?:\/\/)?www\./, "$1");
+}
+
 /** Extract the root domain from a pattern for grouping */
 export function extractDomain(pattern: string): string {
   let p = pattern.replace(/^https?:\/\//, "");
   p = p.replace(/^\*\./, "");
   const host = p.split("/")[0];
   return host.replace(/^www\./, "").toLowerCase();
+}
+
+/** Normalize existing rules — strip www. from patterns and domains */
+export async function migrateNormalizeWww(): Promise<void> {
+  const rules = await blockRulesStorage.getValue();
+  let changed = false;
+  const normalized = rules.map((r) => {
+    const newPattern = normalizePattern(r.pattern);
+    const newDomain = r.domain.replace(/^www\./, "");
+    if (newPattern !== r.pattern || newDomain !== r.domain) {
+      changed = true;
+      return { ...r, pattern: newPattern, domain: newDomain };
+    }
+    return r;
+  });
+  // Deduplicate rules that now have the same pattern
+  if (changed) {
+    const seen = new Set<string>();
+    const deduped = normalized.filter((r) => {
+      if (seen.has(r.pattern)) return false;
+      seen.add(r.pattern);
+      return true;
+    });
+    await blockRulesStorage.setValue(deduped);
+  }
 }
 
 /** Generate a short random id */

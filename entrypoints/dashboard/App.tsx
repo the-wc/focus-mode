@@ -6,20 +6,23 @@ import {
   Plus,
   Download,
   Upload,
-  Shield,
-  BookOpen,
   ChevronDown,
   X,
   Trash2,
   EllipsisVertical,
   Check,
   Search,
+  Globe,
+  MessageCircle,
+  Settings2,
 } from "lucide-react";
 import {
   blockRulesStorage,
   blockEventsStorage,
   promptConfigStorage,
   extractDomain,
+  normalizePattern,
+  migrateNormalizeWww,
   generateId,
   secondsToTimer,
   timerToSeconds,
@@ -65,11 +68,10 @@ function App() {
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(
     new Set(),
   );
-  const [tab, setTab] = useState<"sites" | "prompts">("sites");
-  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
-    blockRulesStorage.getValue().then(setRules);
+    // Normalize any legacy www. patterns/domains, then load
+    migrateNormalizeWww().then(() => blockRulesStorage.getValue().then(setRules));
     blockEventsStorage.getValue().then(setEvents);
     promptConfigStorage.getValue().then(setPromptConfig);
     const unwatchRules = blockRulesStorage.watch(setRules);
@@ -89,9 +91,11 @@ function App() {
   const grouped = useMemo(() => {
     const map = new Map<string, BlockRule[]>();
     for (const rule of rules) {
-      const group = map.get(rule.domain) || [];
+      // Always normalize domain for grouping (safety net for un-migrated data)
+      const domain = rule.domain.replace(/^www\./, "");
+      const group = map.get(domain) || [];
       group.push(rule);
-      map.set(rule.domain, group);
+      map.set(domain, group);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [rules]);
@@ -106,7 +110,7 @@ function App() {
   }
 
   async function addRule(pattern: string, source?: string) {
-    const clean = pattern.replace(/^https?:\/\//, "").replace(/^www\./, "").trim().toLowerCase();
+    const clean = normalizePattern(pattern.replace(/^https?:\/\//, "")).trim().toLowerCase();
     if (!clean) return;
     const current = await blockRulesStorage.getValue();
     if (current.some((r) => r.pattern === clean)) return;
@@ -152,92 +156,26 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
-      <div className="max-w-3xl mx-auto px-4 py-16 space-y-8">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Focus Mode</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage blocked sites and reflection prompts
-          </p>
+      <div className="max-w-4xl mx-auto px-6 py-20 space-y-10">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <img src="/logo.svg" alt="Focus Mode" className="w-10 h-10 dark:invert-0 invert" />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Focus Mode</h1>
+            <p className="text-muted-foreground">
+              Stay intentional with how you spend your time online.
+            </p>
+          </div>
         </div>
 
-        <div className="pt-8">
+        {/* Heatmap card */}
+        <section className="rounded-2xl bg-card border p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-foreground mb-5">Activity</h2>
           <BlockHeatmap events={events} />
-        </div>
+        </section>
 
-        <div className="pt-4" />
-
-        {/* Tabs */}
-        <div className="flex items-center border-b">
-          <div className="flex gap-4 flex-1">
-            <button
-              onClick={() => { setTab("sites"); setShowImport(false); }}
-              className={`pb-2 text-sm transition-colors flex items-center gap-1.5 ${
-                tab === "sites"
-                  ? "border-b-2 border-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Shield size={14} />
-              Blocked Sites
-            </button>
-            <button
-              onClick={() => { setTab("prompts"); setShowImport(false); }}
-              className={`pb-2 text-sm transition-colors flex items-center gap-1.5 ${
-                tab === "prompts"
-                  ? "border-b-2 border-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <BookOpen size={14} />
-              Prompts
-            </button>
-          </div>
-          <div className="flex items-center gap-2 pb-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7"
-              onClick={() => setShowImport(!showImport)}
-            >
-              {showImport ? <X size={14} /> : <Download size={14} />}
-              {showImport ? "Close" : "Import"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7"
-              onClick={async () => {
-                if (tab === "sites") {
-                  const currentRules = await blockRulesStorage.getValue();
-                  const config = {
-                    name: "My Focus Mode Config",
-                    description: "Exported block rules",
-                    rules: currentRules.map((r) => ({
-                      pattern: r.pattern,
-                      timerSeconds: r.timerSeconds,
-                      accessLimit: r.accessLimit,
-                      limitPeriod: r.limitPeriod,
-                      browseSeconds: r.browseSeconds ?? 0,
-                    })),
-                  };
-                  downloadJson(config, "focus-mode-config.json");
-                } else {
-                  const current = await promptConfigStorage.getValue();
-                  const prompts = Array.isArray(current.prompts) ? current.prompts : [];
-                  downloadJson(
-                    { name: "Focus Mode Prompts", prompts: prompts.map((p) => p.text) },
-                    "focus-mode-prompts.json",
-                  );
-                }
-              }}
-            >
-              <Upload size={14} />
-              Export
-            </Button>
-          </div>
-        </div>
-
-        {tab === "sites" && (
+        {/* Blocked Sites card */}
+        <section className="rounded-2xl bg-card border p-6 shadow-sm">
           <SitesTab
             grouped={grouped}
             expandedDomains={expandedDomains}
@@ -248,13 +186,13 @@ function App() {
             removeAllForDomain={removeAllForDomain}
             input={input}
             setInput={setInput}
-            showImport={showImport}
           />
-        )}
+        </section>
 
-        {tab === "prompts" && (
-          <PromptsTab config={promptConfig} showImport={showImport} />
-        )}
+        {/* Prompts card */}
+        <section className="rounded-2xl bg-card border p-6 shadow-sm">
+          <PromptsTab config={promptConfig} />
+        </section>
       </div>
     </div>
   );
@@ -269,11 +207,11 @@ const MONTH_LABELS = [
 ];
 
 const HEAT_COLORS: [string, string][] = [
-  ["#ebeef2", "#1c2028"],
-  ["#c8d1dc", "#2a3444"],
-  ["#94a3b8", "#3d4f66"],
-  ["#6482a3", "#527199"],
-  ["#3b6b9a", "#6b9fd4"],
+  ["#f0eeeb", "#1e1e1c"],
+  ["#d4e4cb", "#263d26"],
+  ["#a8cfaa", "#3a6340"],
+  ["#6db070", "#4e9a5a"],
+  ["#3d8b47", "#6cc078"],
 ];
 
 function getHeatLevel(count: number): number {
@@ -374,14 +312,14 @@ function BlockHeatmap({ events }: { events: BlockEvent[] }) {
   }
 
   const cols = weeks.length;
-  const cell = 10;
+  const cell = 11;
   const gap = 3;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
       <div>
         {/* Month labels */}
-        <div style={{ display: "flex", paddingLeft: 28, marginBottom: 2 }}>
+        <div style={{ display: "flex", paddingLeft: 30, marginBottom: 4 }}>
           {monthLabels.map((m, i) => {
             const nextCol = monthLabels[i + 1]?.colIndex ?? cols;
             const span = nextCol - m.colIndex;
@@ -391,7 +329,8 @@ function BlockHeatmap({ events }: { events: BlockEvent[] }) {
                 className="text-muted-foreground"
                 style={{
                   width: span * (cell + gap),
-                  fontSize: 9,
+                  fontSize: 10,
+                  fontWeight: 500,
                   flexShrink: 0,
                 }}
               >
@@ -414,8 +353,8 @@ function BlockHeatmap({ events }: { events: BlockEvent[] }) {
             <div
               className="text-muted-foreground"
               style={{
-                width: 28,
-                fontSize: 9,
+                width: 30,
+                fontSize: 10,
                 flexShrink: 0,
                 visibility: rowIdx % 2 === 1 ? "visible" : "hidden",
               }}
@@ -428,8 +367,8 @@ function BlockHeatmap({ events }: { events: BlockEvent[] }) {
               const level = isFuture ? -1 : getHeatLevel(day.count);
               const bg = isFuture
                 ? isDark
-                  ? "rgba(17,19,24,0.4)"
-                  : "rgba(244,245,247,0.4)"
+                  ? "rgba(17,19,24,0.3)"
+                  : "rgba(240,238,235,0.5)"
                 : isDark
                   ? HEAT_COLORS[level][1]
                   : HEAT_COLORS[level][0];
@@ -449,10 +388,11 @@ function BlockHeatmap({ events }: { events: BlockEvent[] }) {
                   style={{
                     width: cell,
                     height: cell,
-                    borderRadius: 2,
+                    borderRadius: 3,
                     backgroundColor: bg,
                     flexShrink: 0,
                     marginRight: gap,
+                    transition: "background-color 0.15s ease",
                   }}
                 />
               );
@@ -460,9 +400,11 @@ function BlockHeatmap({ events }: { events: BlockEvent[] }) {
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        Blocked {totalBlocks.toLocaleString()} distraction
-        {totalBlocks === 1 ? "" : "s"} in the last year
+      <p className="text-sm text-muted-foreground pt-1">
+        {totalBlocks === 0
+          ? "No distractions blocked yet"
+          : <>Blocked <span className="font-medium text-foreground">{totalBlocks.toLocaleString()}</span> distraction{totalBlocks === 1 ? "" : "s"} in the last year</>
+        }
       </p>
     </div>
   );
@@ -480,7 +422,6 @@ function SitesTab({
   removeAllForDomain,
   input,
   setInput,
-  showImport,
 }: {
   grouped: [string, BlockRule[]][];
   expandedDomains: Set<string>;
@@ -491,9 +432,9 @@ function SitesTab({
   removeAllForDomain: (domain: string) => void;
   input: string;
   setInput: (v: string) => void;
-  showImport: boolean;
 }) {
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
+  const [showImport, setShowImport] = useState(false);
 
   const allDomains = useMemo(() => grouped.map(([d]) => d), [grouped]);
   const hasSelection = selectedDomains.size > 0;
@@ -541,49 +482,96 @@ function SitesTab({
   }, [grouped, debouncedSearch]);
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar: search + add */}
+    <div className="space-y-5">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center">
+            <Globe size={17} className="text-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold tracking-tight">Blocked Sites</h2>
+            <p className="text-xs text-muted-foreground">
+              {grouped.length === 0 ? "Add sites to block" : `${grouped.length} site${grouped.length === 1 ? "" : "s"} managed`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-8 text-muted-foreground"
+            onClick={() => setShowImport(!showImport)}
+          >
+            {showImport ? <X size={14} /> : <Download size={14} />}
+            {showImport ? "Close" : "Import"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-8 text-muted-foreground"
+            onClick={async () => {
+              const currentRules = await blockRulesStorage.getValue();
+              const config = {
+                name: "My Focus Mode Config",
+                description: "Exported block rules",
+                rules: currentRules.map((r) => ({
+                  pattern: r.pattern,
+                  timerSeconds: r.timerSeconds,
+                  accessLimit: r.accessLimit,
+                  limitPeriod: r.limitPeriod,
+                  browseSeconds: r.browseSeconds ?? 0,
+                })),
+              };
+              downloadJson(config, "focus-mode-config.json");
+            }}
+          >
+            <Upload size={14} />
+            Export
+          </Button>
+        </div>
+      </div>
+
+      {/* Search + add */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search sites..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="text-sm pl-8"
+            className="text-sm pl-9 h-10 rounded-xl bg-background border-border"
           />
         </div>
         <Button
           size="icon"
-          className="shrink-0"
+          className="shrink-0 h-10 w-10 rounded-xl"
           onClick={() => setShowAddForm(!showAddForm)}
         >
-          <Plus size={16} className={`transition-transform ${showAddForm ? "rotate-45" : ""}`} />
+          <Plus size={16} className={`transition-transform duration-200 ${showAddForm ? "rotate-45" : ""}`} />
         </Button>
       </div>
 
       {/* Collapsible add form */}
       {showAddForm && (
-        <div className="space-y-2">
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              addRule(input);
-            }}
-          >
-            <Input
-              autoFocus
-              placeholder="e.g. reddit.com, *.twitter.com/notifications/*"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="text-sm"
-            />
-            <Button type="submit" variant="secondary">
-              Add
-            </Button>
-          </form>
-        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addRule(input);
+          }}
+        >
+          <Input
+            autoFocus
+            placeholder="e.g. reddit.com, *.twitter.com/notifications/*"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="text-sm h-10 rounded-xl bg-background"
+          />
+          <Button type="submit" variant="secondary" className="rounded-xl h-10">
+            Add
+          </Button>
+        </form>
       )}
 
       {/* Import panel */}
@@ -627,12 +615,14 @@ function SitesTab({
 
       {/* Site list */}
       {filteredGrouped.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
-          {debouncedSearch ? "No matching sites found." : "No sites blocked yet."}
-        </p>
+        <div className="py-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            {debouncedSearch ? "No matching sites found." : "No sites blocked yet. Add one above to get started."}
+          </p>
+        </div>
       ) : (
-        <div>
-          {/* Table header — shown when items are selected */}
+        <div className="space-y-3">
+          {/* Selection header */}
           {hasSelection && (
             <SelectionHeader
               count={selectedDomains.size}
@@ -654,86 +644,196 @@ function SitesTab({
                     browseSeconds: r.browseSeconds ?? 0,
                   })),
                 };
-                const blob = new Blob([JSON.stringify(config, null, 2)], {
-                  type: "application/json",
-                });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "focus-mode-config.json";
-                a.click();
-                URL.revokeObjectURL(url);
+                downloadJson(config, "focus-mode-config.json");
               }}
               onDelete={deleteSelected}
             />
           )}
-          {filteredGrouped.map(([domain, domainRules], idx) => {
-            const isExpanded = expandedDomains.has(domain);
-            const isLast = idx === filteredGrouped.length - 1;
-            const isDomainSelected = selectedDomains.has(domain);
-            return (
-              <div key={domain} className={`group/domain ${isLast ? "" : "border-b"}`}>
-                <div
-                  className="flex items-center gap-2 px-2 py-3 -mx-2 rounded hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => toggleDomain(domain)}
-                >
-                  {/* Checkbox — visible on hover or when any selection exists */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSelectDomain(domain);
-                    }}
-                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
-                      isDomainSelected
-                        ? "bg-foreground border-foreground"
-                        : "border-input"
-                    } ${hasSelection ? "opacity-100" : "opacity-0 group-hover/domain:opacity-100"}`}
-                  >
-                    {isDomainSelected && <Check size={10} className="text-background" />}
-                  </button>
 
-                  <div className="flex items-center gap-3 flex-1">
-                    <img
-                      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                      alt=""
-                      className="w-4 h-4 rounded-sm"
-                    />
-                    <span className="text-sm font-medium flex-1 text-left">
-                      {domain}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {domainRules.length}{" "}
-                      {domainRules.length === 1 ? "rule" : "rules"}
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                    />
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div className="pl-8 pb-3 space-y-2">
-                    {domainRules.map((rule, ruleIdx) => (
-                      <RuleRow
-                        key={rule.id}
-                        rule={rule}
-                        isLast={ruleIdx === domainRules.length - 1}
-                        isOnlyRule={domainRules.length === 1}
-                        onRemove={() => removeRule(rule.id)}
-                        onUpdate={(u) => updateRule(rule.id, u)}
-                      />
-                    ))}
-                    <div className="flex justify-between pt-1">
-                      <AddSubRuleInput domain={domain} onAdd={addRule} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {/* Card grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {filteredGrouped.map(([domain, domainRules]) => {
+              const isExpanded = expandedDomains.has(domain);
+              const isDomainSelected = selectedDomains.has(domain);
+              return (
+                <SiteCard
+                  key={domain}
+                  domain={domain}
+                  domainRules={domainRules}
+                  isExpanded={isExpanded}
+                  isDomainSelected={isDomainSelected}
+                  hasSelection={hasSelection}
+                  onToggle={() => toggleDomain(domain)}
+                  onToggleSelect={() => toggleSelectDomain(domain)}
+                  onRemoveRule={removeRule}
+                  onUpdateRule={updateRule}
+                  onAddRule={addRule}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SiteCard({
+  domain,
+  domainRules,
+  isExpanded,
+  isDomainSelected,
+  hasSelection,
+  onToggle,
+  onToggleSelect,
+  onRemoveRule,
+  onUpdateRule,
+  onAddRule,
+}: {
+  domain: string;
+  domainRules: BlockRule[];
+  isExpanded: boolean;
+  isDomainSelected: boolean;
+  hasSelection: boolean;
+  onToggle: () => void;
+  onToggleSelect: () => void;
+  onRemoveRule: (id: string) => void;
+  onUpdateRule: (id: string, updates: Partial<BlockRule>) => void;
+  onAddRule: (pattern: string, source?: string) => void;
+}) {
+  // Derive blocking summary for at-a-glance info
+  const exceptions = domainRules.filter((r) => r.isException);
+  const blocks = domainRules.filter((r) => !r.isException);
+  const hasLimits = blocks.some((r) => r.accessLimit > 0);
+  const isAlwaysBlocked = exceptions.length === 0 && !hasLimits;
+
+  return (
+    <div
+      className={`group/card rounded-xl border transition-all duration-200 ${
+        isExpanded
+          ? "col-span-2 sm:col-span-3 bg-card border-border shadow-md"
+          : "bg-card hover:shadow-md cursor-pointer"
+      }`}
+    >
+      {/* Card face */}
+      <div
+        className="flex items-center gap-3 px-4 py-3.5"
+        onClick={onToggle}
+      >
+        {/* Checkbox */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+            isDomainSelected
+              ? "bg-foreground border-foreground"
+              : "border-input"
+          } ${hasSelection ? "opacity-100" : "opacity-0 group-hover/card:opacity-100"}`}
+        >
+          {isDomainSelected && <Check size={10} className="text-background" />}
+        </button>
+
+        <img
+          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+          alt=""
+          className="w-5 h-5 rounded"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold truncate">{domain}</p>
+            <span className="text-xs text-muted-foreground tabular-nums">{domainRules.length}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1">
+            {isAlwaysBlocked && (
+              <span className="text-[10px] font-medium text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-px rounded-full">Blocked</span>
+            )}
+            {hasLimits && (
+              <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-px rounded-full">Limited</span>
+            )}
+            {exceptions.length > 0 && (
+              <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-px rounded-full">{exceptions.length} allowed</span>
+            )}
+          </div>
+        </div>
+        <ChevronDown
+          size={14}
+          className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+        />
+      </div>
+
+      {/* Expanded detail panel */}
+      {isExpanded && (
+        <ExpandedRulePanel
+          domain={domain}
+          blocks={blocks}
+          exceptions={exceptions}
+          onRemoveRule={onRemoveRule}
+          onUpdateRule={onUpdateRule}
+          onAddRule={onAddRule}
+        />
+      )}
+    </div>
+  );
+}
+
+function ExpandedRulePanel({
+  domain,
+  blocks,
+  exceptions,
+  onRemoveRule,
+  onUpdateRule,
+  onAddRule,
+}: {
+  domain: string;
+  blocks: BlockRule[];
+  exceptions: BlockRule[];
+  onRemoveRule: (id: string) => void;
+  onUpdateRule: (id: string, updates: Partial<BlockRule>) => void;
+  onAddRule: (pattern: string, source?: string) => void;
+}) {
+  return (
+    <div className="px-4 pb-4 border-t">
+      <div className="pt-3 space-y-1">
+        {blocks.map((rule, i) => (
+          <RuleRow
+            key={rule.id}
+            rule={rule}
+            domain={domain}
+            isLast={i === blocks.length - 1 && exceptions.length === 0}
+            isOnlyRule={blocks.length === 1 && exceptions.length === 0}
+            onRemove={() => onRemoveRule(rule.id)}
+            onUpdate={(u) => onUpdateRule(rule.id, u)}
+          />
+        ))}
+      </div>
+
+      {exceptions.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 pt-3 pb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Allowed</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <div className="space-y-1">
+            {exceptions.map((rule, i) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                domain={domain}
+                isLast={i === exceptions.length - 1}
+                isOnlyRule={exceptions.length === 1}
+                onRemove={() => onRemoveRule(rule.id)}
+                onUpdate={(u) => onUpdateRule(rule.id, u)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="pt-3">
+        <AddSubRuleInput domain={domain} onAdd={onAddRule} />
+      </div>
     </div>
   );
 }
@@ -754,7 +854,7 @@ function SelectionHeader({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-2 py-2 border-b">
+    <div className="flex items-center gap-3 py-2.5 px-3 mb-1 rounded-xl bg-muted">
       <button
         onClick={onToggleAll}
         className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
@@ -791,13 +891,13 @@ function SelectionHeader({
               className="fixed inset-0 z-10"
               onClick={() => setMenuOpen(false)}
             />
-            <div className="absolute right-0 top-full mt-1 z-20 rounded-md border bg-popover shadow-md py-1 min-w-[140px]">
+            <div className="absolute right-0 top-full mt-1 z-20 rounded-xl border bg-popover shadow-lg py-1 min-w-[140px]">
               <button
                 onClick={() => {
                   onDelete();
                   setMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors text-left"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors text-left"
               >
                 <Trash2 size={13} />
                 Delete
@@ -824,17 +924,17 @@ function ImportPanel({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-      <p className="text-xs text-muted-foreground">
+    <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-3">
+      <p className="text-xs text-muted-foreground font-medium">
         Choose a preset or import your own
       </p>
 
       {presets.map((preset) => {
         const isExpanded = expanded.has(preset.name);
         return (
-          <div key={preset.name} className="rounded-md border bg-background">
+          <div key={preset.name} className="rounded-xl border border-border bg-card overflow-hidden">
             <div
-              className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md"
+              className="flex items-center justify-between px-4 py-3 cursor-pointer"
               onClick={() =>
                 setExpanded((prev) => {
                   const next = new Set(prev);
@@ -844,10 +944,10 @@ function ImportPanel({
                 })
               }
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <ChevronDown
                   size={12}
-                  className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                  className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                 />
                 <div>
                   <p className="text-sm font-medium">{preset.name}</p>
@@ -871,12 +971,12 @@ function ImportPanel({
             </div>
 
             {isExpanded && (
-              <div className="px-3 pb-2.5 pt-0.5">
+              <div className="px-4 pb-3 pt-0">
                 <div className="flex flex-wrap gap-1.5">
                   {preset.items.map((item) => (
                     <span
                       key={item}
-                      className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
+                      className="text-xs bg-muted px-2.5 py-1 rounded-full text-muted-foreground"
                     >
                       {item}
                     </span>
@@ -890,7 +990,7 @@ function ImportPanel({
 
       <button
         onClick={onImportFile}
-        className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed py-2 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+        className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
       >
         <Upload size={12} />
         Import from file
@@ -915,14 +1015,14 @@ function UnitPicker<T extends string>({
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-1"
       >
         {current?.label ?? value}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-20 rounded-md border bg-popover shadow-md py-1 min-w-[70px]">
+          <div className="absolute left-0 top-full mt-1 z-20 rounded-xl border bg-popover shadow-lg py-1 min-w-[80px]">
             {options.map((opt) => (
               <button
                 key={opt.value}
@@ -930,7 +1030,7 @@ function UnitPicker<T extends string>({
                   onChange(opt.value);
                   setOpen(false);
                 }}
-                className={`w-full text-left px-3 py-1 text-xs hover:bg-muted transition-colors ${
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors ${
                   opt.value === value ? "font-medium" : "text-muted-foreground"
                 }`}
               >
@@ -946,44 +1046,64 @@ function UnitPicker<T extends string>({
 
 function RuleRow({
   rule,
+  domain,
   isLast,
   isOnlyRule,
   onRemove,
   onUpdate,
 }: {
   rule: BlockRule;
+  domain: string;
   isLast: boolean;
   isOnlyRule: boolean;
   onRemove: () => void;
   onUpdate: (updates: Partial<BlockRule>) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const timer = secondsToTimer(rule.timerSeconds);
   const browseTimer = secondsToTimer(rule.browseSeconds ?? 0);
 
+  // Show path-only if pattern starts with the domain
+  const rawPattern = rule.pattern.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  const displayPattern = rawPattern.startsWith(domain)
+    ? rawPattern.slice(domain.length) || domain
+    : rawPattern;
+  const isPathOnly = displayPattern.startsWith("/");
+
   return (
-    <div className={`px-1 py-2.5 space-y-2 ${isLast ? "" : "border-b"}`}>
-      {/* Row 1: pattern + badges + menu */}
+    <div className={`px-2 py-3 rounded-lg ${isLast ? "" : "border-b border-border"}`}>
+      {/* Row 1: pattern + badges + actions */}
       <div className="flex items-center gap-2">
-        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-          {rule.pattern.replace(/^https?:\/\//, "")}
+        <code className="text-xs bg-muted px-2 py-1 rounded-md font-mono">
+          {isPathOnly && <span className="text-muted-foreground">{domain}</span>}
+          {displayPattern}
         </code>
         {rule.isException && (
-          <span className="text-[10px] text-green-600 dark:text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
             Allow
           </span>
         )}
         {rule.source && (
-          <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
             {rule.source}
           </span>
         )}
-        <div className="relative ml-auto">
+        <div className="flex items-center gap-0.5 ml-auto">
+          {!rule.isException && (
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className={`p-1.5 rounded-md transition-colors ${showConfig ? "text-foreground bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            >
+              <Settings2 size={13} />
+            </button>
+          )}
+          <div className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted transition-colors p-1.5 rounded-md"
             >
-              <EllipsisVertical size={14} />
+              <EllipsisVertical size={13} />
             </button>
             {menuOpen && (
               <>
@@ -991,13 +1111,13 @@ function RuleRow({
                   className="fixed inset-0 z-10"
                   onClick={() => setMenuOpen(false)}
                 />
-                <div className="absolute right-0 top-full mt-1 z-20 rounded-md border bg-popover shadow-md py-1 min-w-[180px]">
+                <div className="absolute right-0 top-full mt-1 z-20 rounded-xl border bg-popover shadow-lg py-1 min-w-[180px]">
                   <button
                     onClick={() => {
                       onUpdate({ isException: !rule.isException });
                       setMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
                   >
                     <Check size={13} className={rule.isException ? "" : "opacity-0"} />
                     Exception (allow)
@@ -1007,7 +1127,7 @@ function RuleRow({
                       onRemove();
                       setMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors text-left"
                   >
                     <Trash2 size={13} />
                     {isOnlyRule ? "Remove block" : "Delete rule"}
@@ -1016,74 +1136,81 @@ function RuleRow({
               </>
             )}
           </div>
+        </div>
       </div>
 
-      {/* Row 2: session config */}
-      {!rule.isException && (() => {
+      {/* Row 2: session config — shown on toggle */}
+      {showConfig && !rule.isException && (() => {
         const hasLimit = rule.accessLimit > 0;
-        const dimmed = !hasLimit ? "opacity-40 pointer-events-none" : "";
+        const dimmed = !hasLimit ? "opacity-35 pointer-events-none" : "";
         return (
-          <div className="flex items-center gap-4 pl-1">
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="number"
-                min={0}
-                value={rule.accessLimit}
-                onChange={(e) =>
-                  onUpdate({ accessLimit: parseInt(e.target.value) || 0 })
-                }
-                className="text-xs h-6 w-14 text-center"
-              />
-              <span className="text-[10px] text-muted-foreground">sessions</span>
-              <UnitPicker
-                value={rule.limitPeriod}
-                options={LIMIT_PERIODS}
-                onChange={(period) => onUpdate({ limitPeriod: period })}
-              />
+          <div className="mt-3 pt-3 border-t border-border grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-muted-foreground font-medium">Sessions</label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  value={rule.accessLimit}
+                  onChange={(e) =>
+                    onUpdate({ accessLimit: parseInt(e.target.value) || 0 })
+                  }
+                  className="text-xs h-7 w-14 text-center rounded-lg"
+                />
+                <UnitPicker
+                  value={rule.limitPeriod}
+                  options={LIMIT_PERIODS}
+                  onChange={(period) => onUpdate({ limitPeriod: period })}
+                />
+              </div>
             </div>
 
-            <div className={`flex items-center gap-1.5 ${dimmed}`}>
-              <label className="text-[10px] text-muted-foreground">Challenge</label>
-              <Input
-                type="number"
-                min={0}
-                value={timer.value}
-                onChange={(e) =>
-                  onUpdate({
-                    timerSeconds: timerToSeconds(parseInt(e.target.value) || 0, timer.unit),
-                  })
-                }
-                className="text-xs h-6 w-14 text-center"
-              />
-              <UnitPicker
-                value={timer.unit}
-                options={TIMER_UNITS}
-                onChange={(unit) =>
-                  onUpdate({ timerSeconds: timerToSeconds(timer.value, unit) })
-                }
-              />
+            <div className={`space-y-1.5 ${dimmed}`}>
+              <label className="text-[11px] text-muted-foreground font-medium">Challenge</label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  value={timer.value}
+                  onChange={(e) =>
+                    onUpdate({
+                      timerSeconds: timerToSeconds(parseInt(e.target.value) || 0, timer.unit),
+                    })
+                  }
+                  className="text-xs h-7 w-14 text-center rounded-lg"
+                />
+                <UnitPicker
+                  value={timer.unit}
+                  options={TIMER_UNITS}
+                  onChange={(unit) =>
+                    onUpdate({ timerSeconds: timerToSeconds(timer.value, unit) })
+                  }
+                />
+              </div>
             </div>
 
-            <div className={`flex items-center gap-1.5 ${dimmed}`}>
-              <label className="text-[10px] text-muted-foreground">Session</label>
-              <Input
-                type="number"
-                min={0}
-                value={browseTimer.value}
-                onChange={(e) =>
-                  onUpdate({
-                    browseSeconds: timerToSeconds(parseInt(e.target.value) || 0, browseTimer.unit),
-                  })
-                }
-                className="text-xs h-6 w-14 text-center"
-              />
-              <UnitPicker
-                value={browseTimer.unit}
-                options={TIMER_UNITS}
-                onChange={(unit) =>
-                  onUpdate({ browseSeconds: timerToSeconds(browseTimer.value, unit) })
-                }
-              />
+            <div className={`space-y-1.5 ${dimmed}`}>
+              <label className="text-[11px] text-muted-foreground font-medium">Session time</label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  value={browseTimer.value}
+                  onChange={(e) =>
+                    onUpdate({
+                      browseSeconds: timerToSeconds(parseInt(e.target.value) || 0, browseTimer.unit),
+                    })
+                  }
+                  className="text-xs h-7 w-14 text-center rounded-lg"
+                />
+                <UnitPicker
+                  value={browseTimer.unit}
+                  options={TIMER_UNITS}
+                  onChange={(unit) =>
+                    onUpdate({ browseSeconds: timerToSeconds(browseTimer.value, unit) })
+                  }
+                />
+              </div>
             </div>
           </div>
         );
@@ -1102,12 +1229,11 @@ function AddSubRuleInput({
   const [value, setValue] = useState("");
   return (
     <form
-      className="flex gap-1"
+      className="flex gap-1.5"
       onSubmit={(e) => {
         e.preventDefault();
         if (value.trim()) {
           let pattern = value.trim();
-          // If the user typed a relative path or slug, prefix with the domain
           if (!pattern.includes(".")) {
             pattern = pattern.startsWith("/") ? pattern : "/" + pattern;
             pattern = domain + pattern;
@@ -1121,9 +1247,9 @@ function AddSubRuleInput({
         placeholder={`e.g. ${domain}/path/*`}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="text-xs h-7 w-48"
+        className="text-xs h-8 w-48 rounded-lg"
       />
-      <Button type="submit" variant="ghost" size="sm" className="h-7 text-xs">
+      <Button type="submit" variant="ghost" size="sm" className="h-8 text-xs rounded-lg">
         <Plus size={12} />
         Add rule
       </Button>
@@ -1133,13 +1259,13 @@ function AddSubRuleInput({
 
 // ── Prompts Tab ──────────────────────────────────────────────────────────────
 
-function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: boolean }) {
+function PromptsTab({ config }: { config: PromptConfig }) {
   const [newPrompt, setNewPrompt] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [showImport, setShowImport] = useState(false);
 
-  // Build unified list: custom prompts + defaults (with stable ids)
   const customPrompts = Array.isArray(config.prompts) ? config.prompts : [];
   const excludedDefaults = new Set(config.excludedDefaults ?? []);
   const allPrompts: (PromptEntry & { isDefault: boolean; defaultIndex?: number })[] = useMemo(() => {
@@ -1227,7 +1353,6 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
     const currentPrompts = Array.isArray(current.prompts) ? current.prompts : [];
     const currentExcluded = new Set(current.excludedDefaults ?? []);
 
-    // Find which selected items are defaults vs custom
     for (const id of selected) {
       if (id.startsWith("default-")) {
         const idx = parseInt(id.replace("default-", ""));
@@ -1244,19 +1369,10 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
   }
 
   function exportPrompts(promptsToExport: PromptEntry[]) {
-    const data = {
-      name: "Focus Mode Prompts",
-      prompts: promptsToExport.map((p) => p.text),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "focus-mode-prompts.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJson(
+      { name: "Focus Mode Prompts", prompts: promptsToExport.map((p) => p.text) },
+      "focus-mode-prompts.json",
+    );
   }
 
   function importPromptsFromFile() {
@@ -1291,31 +1407,69 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
   }, [allPrompts, debouncedSearch]);
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar: search + add */}
+    <div className="space-y-5">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center">
+            <MessageCircle size={17} className="text-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold tracking-tight">Reflection Prompts</h2>
+            <p className="text-xs text-muted-foreground">
+              {allPrompts.length === 0 ? "Add prompts for mindful pauses" : `${allPrompts.length} prompt${allPrompts.length === 1 ? "" : "s"} active`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-8 text-muted-foreground"
+            onClick={() => setShowImport(!showImport)}
+          >
+            {showImport ? <X size={14} /> : <Download size={14} />}
+            {showImport ? "Close" : "Import"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-8 text-muted-foreground"
+            onClick={() => {
+              const prompts = Array.isArray(config.prompts) ? config.prompts : [];
+              exportPrompts(prompts);
+            }}
+          >
+            <Upload size={14} />
+            Export
+          </Button>
+        </div>
+      </div>
+
+      {/* Search + add */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search prompts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="text-sm pl-8"
+            className="text-sm pl-9 h-10 rounded-xl bg-background border-border"
           />
         </div>
         <Button
           size="icon"
-          className="shrink-0"
+          className="shrink-0 h-10 w-10 rounded-xl"
           onClick={() => setShowAddForm(!showAddForm)}
         >
-          <Plus size={16} className={`transition-transform ${showAddForm ? "rotate-45" : ""}`} />
+          <Plus size={16} className={`transition-transform duration-200 ${showAddForm ? "rotate-45" : ""}`} />
         </Button>
       </div>
 
       {/* Collapsible add form */}
       {showAddForm && (
         <form
-          className="relative rounded-md border border-input bg-background"
+          className="relative rounded-xl border border-input bg-background overflow-hidden"
           onSubmit={(e) => {
             e.preventDefault();
             addPrompt();
@@ -1332,14 +1486,14 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
                 addPrompt();
               }
             }}
-            className="resize-none border-0 shadow-none focus-visible:ring-0 text-sm pb-10 min-h-0"
-            rows={1}
+            className="resize-none border-0 shadow-none focus-visible:ring-0 text-sm pb-12 min-h-0"
+            rows={2}
           />
-          <div className="absolute bottom-2 right-2">
+          <div className="absolute bottom-3 right-3">
             <button
               type="submit"
               disabled={!newPrompt.trim()}
-              className="rounded-md bg-foreground p-1.5 text-background transition-opacity disabled:opacity-30 hover:opacity-80"
+              className="rounded-lg bg-foreground p-2 text-background transition-opacity disabled:opacity-20 hover:opacity-80"
             >
               <Plus size={14} />
             </button>
@@ -1365,7 +1519,7 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
 
       {/* Selection header */}
       {hasSelection && (
-        <div className="flex items-center gap-3 px-1 py-2 border-b">
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-muted">
           <button
             onClick={toggleSelectAll}
             className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
@@ -1394,19 +1548,19 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
         </div>
       )}
 
-      {/* Prompt list — unified */}
+      {/* Prompt list */}
       {filteredPrompts.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">
-          {debouncedSearch ? "No matching prompts found." : "No prompts configured."}
-        </p>
+        <div className="py-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            {debouncedSearch ? "No matching prompts found." : "No prompts configured yet."}
+          </p>
+        </div>
       ) : (
-        <div>
-          {filteredPrompts.map((p, i) => (
+        <div className="space-y-1.5">
+          {filteredPrompts.map((p) => (
             <div
               key={p.id}
-              className={`group/prompt flex items-start gap-3 py-2.5 -mx-2 px-2 rounded hover:bg-muted/50 transition-colors ${
-                i < filteredPrompts.length - 1 ? "border-b" : ""
-              }`}
+              className="group/prompt flex items-start gap-3 py-3 px-3 rounded-xl hover:bg-muted/50 transition-colors"
             >
               {/* Checkbox */}
               <button
@@ -1422,7 +1576,7 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
                 )}
               </button>
 
-              {/* Text — editable on click (not for defaults) */}
+              {/* Text */}
               {editingId === p.id && !p.isDefault ? (
                 <form
                   className="flex-1"
@@ -1439,12 +1593,12 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
                     onKeyDown={(e) => {
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="text-sm h-7"
+                    className="text-sm h-8 rounded-lg"
                   />
                 </form>
               ) : (
                 <p
-                  className={`text-sm flex-1 ${p.isDefault ? "" : "cursor-pointer"}`}
+                  className={`text-sm flex-1 leading-relaxed ${p.isDefault ? "" : "cursor-pointer"}`}
                   onClick={() => {
                     if (!p.isDefault) {
                       setEditingId(p.id);
@@ -1457,15 +1611,15 @@ function PromptsTab({ config, showImport }: { config: PromptConfig; showImport: 
               )}
 
               {/* Source label + delete */}
-              <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+              <div className="flex items-center gap-2 shrink-0 mt-0.5">
                 {p.source && (
-                  <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                  <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
                     {p.source}
                   </span>
                 )}
                 <button
                   onClick={() => removePrompt(p.id)}
-                  className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover/prompt:opacity-100"
+                  className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover/prompt:opacity-100 p-0.5"
                 >
                   <X size={14} />
                 </button>
@@ -1491,13 +1645,13 @@ function PromptSelectionMenu({ onDelete }: { onDelete: () => void }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 rounded-md border bg-popover shadow-md py-1 min-w-[140px]">
+          <div className="absolute right-0 top-full mt-1 z-20 rounded-xl border bg-popover shadow-lg py-1 min-w-[140px]">
             <button
               onClick={() => {
                 onDelete();
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-muted transition-colors text-left"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors text-left"
             >
               <Trash2 size={13} />
               Delete
