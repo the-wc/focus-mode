@@ -8,6 +8,7 @@ export default function App({
   sessionsExhausted,
   sessionsUsed,
   sessionsLimit,
+  browseDurationOptions,
   onDismiss,
 }: {
   hostname: string;
@@ -16,7 +17,8 @@ export default function App({
   sessionsExhausted: boolean;
   sessionsUsed: number;
   sessionsLimit: number;
-  onDismiss: () => void;
+  browseDurationOptions?: number[];
+  onDismiss: (chosenBrowseSeconds?: number) => void;
 }) {
   const [isDark, setIsDark] = useState(
     window.matchMedia("(prefers-color-scheme: dark)").matches,
@@ -47,6 +49,7 @@ export default function App({
         sessionsExhausted={sessionsExhausted}
         sessionsUsed={sessionsUsed}
         sessionsLimit={sessionsLimit}
+        browseDurationOptions={browseDurationOptions}
         onDismiss={onDismiss}
       />
     </div>

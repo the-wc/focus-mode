@@ -107,6 +107,9 @@ export interface BlockRule {
   isException?: boolean;
   /** How long (in seconds) the user can browse after passing the challenge. 0 = unlimited */
   browseSeconds?: number;
+  /** Predefined session duration choices (in seconds) shown when requesting access.
+   *  When set and non-empty, the user picks one instead of using the single browseSeconds value. */
+  browseDurationOptions?: number[];
 }
 
 export interface BlockEvent {

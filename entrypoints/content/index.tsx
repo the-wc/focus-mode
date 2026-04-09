@@ -63,8 +63,12 @@ export default defineContentScript({
     async function grantSession(rule: BlockRule) {
       const browseSec = rule.browseSeconds ?? 0;
       if (browseSec <= 0) return;
+      await grantSessionWithDuration(rule, browseSec);
+    }
+
+    async function grantSessionWithDuration(rule: BlockRule, browseSec: number) {
+      if (browseSec <= 0) return;
       const sessions = await activeSessionsStorage.getValue();
-      // Prune expired sessions and add the new one
       const now = Date.now();
       const active = sessions.filter((s) => s.expiresAt > now);
       active.push({ ruleId: rule.id, expiresAt: now + browseSec * 1000 });
@@ -108,10 +112,14 @@ export default defineContentScript({
               sessionsExhausted={mode === "exhausted"}
               sessionsUsed={sessionsUsed}
               sessionsLimit={rule.accessLimit}
-              onDismiss={async () => {
+              browseDurationOptions={rule.browseDurationOptions}
+              onDismiss={async (chosenBrowseSeconds?: number) => {
+                // Use the user-chosen duration if provided, otherwise fall back to rule default
+                const browseSec = chosenBrowseSeconds ?? rule.browseSeconds ?? 0;
+
                 if (mode === "gate") {
                   await recordBlock(rule);
-                  await grantSession(rule);
+                  await grantSessionWithDuration(rule, browseSec);
                 }
 
                 hideStyle.remove();
@@ -119,7 +127,6 @@ export default defineContentScript({
                 ui = null;
 
                 // If browse time is configured, re-block after it expires
-                const browseSec = rule.browseSeconds ?? 0;
                 if (browseSec > 0) {
                   setTimeout(async () => {
                     await revokeSession(rule);

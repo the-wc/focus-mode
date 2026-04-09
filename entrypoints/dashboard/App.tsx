@@ -521,6 +521,7 @@ function SitesTab({
                   accessLimit: r.accessLimit,
                   limitPeriod: r.limitPeriod,
                   browseSeconds: r.browseSeconds ?? 0,
+                  ...(r.browseDurationOptions?.length ? { browseDurationOptions: r.browseDurationOptions } : {}),
                 })),
               };
               downloadJson(config, "focus-mode-config.json");
@@ -642,6 +643,7 @@ function SitesTab({
                     accessLimit: r.accessLimit,
                     limitPeriod: r.limitPeriod,
                     browseSeconds: r.browseSeconds ?? 0,
+                    ...(r.browseDurationOptions?.length ? { browseDurationOptions: r.browseDurationOptions } : {}),
                   })),
                 };
                 downloadJson(config, "focus-mode-config.json");
@@ -1063,6 +1065,9 @@ function RuleRow({
   const [showConfig, setShowConfig] = useState(false);
   const timer = secondsToTimer(rule.timerSeconds);
   const browseTimer = secondsToTimer(rule.browseSeconds ?? 0);
+  const durationOptions = rule.browseDurationOptions ?? [];
+  const [newDurValue, setNewDurValue] = useState("");
+  const [newDurUnit, setNewDurUnit] = useState<TimerUnit>("m");
 
   // Show path-only if pattern starts with the domain
   const rawPattern = rule.pattern.replace(/^https?:\/\//, "").replace(/^www\./, "");
@@ -1144,7 +1149,8 @@ function RuleRow({
         const hasLimit = rule.accessLimit > 0;
         const dimmed = !hasLimit ? "opacity-35 pointer-events-none" : "";
         return (
-          <div className="mt-3 pt-3 border-t border-border grid grid-cols-3 gap-3">
+          <>
+          <div className="mt-3 pt-3 border-t border-border grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[11px] text-muted-foreground font-medium">Sessions</label>
               <div className="flex items-center gap-1.5">
@@ -1188,31 +1194,91 @@ function RuleRow({
                 />
               </div>
             </div>
-
-            <div className={`space-y-1.5 ${dimmed}`}>
-              <label className="text-[11px] text-muted-foreground font-medium">Session time</label>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  min={0}
-                  value={browseTimer.value}
-                  onChange={(e) =>
-                    onUpdate({
-                      browseSeconds: timerToSeconds(parseInt(e.target.value) || 0, browseTimer.unit),
-                    })
-                  }
-                  className="text-xs h-7 w-14 text-center rounded-lg"
-                />
-                <UnitPicker
-                  value={browseTimer.unit}
-                  options={TIMER_UNITS}
-                  onChange={(unit) =>
-                    onUpdate({ browseSeconds: timerToSeconds(browseTimer.value, unit) })
-                  }
-                />
-              </div>
-            </div>
           </div>
+
+          {/* Duration options */}
+          <div className={`mt-3 pt-3 border-t border-border space-y-2 ${dimmed}`}>
+            <label className="text-[11px] text-muted-foreground font-medium">Session durations</label>
+            {durationOptions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {durationOptions.map((sec) => {
+                  const t = secondsToTimer(sec);
+                  const labels: Record<TimerUnit, string> = { s: "sec", m: "min", h: "hr" };
+                  return (
+                    <span
+                      key={sec}
+                      className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded-md"
+                    >
+                      {t.value} {labels[t.unit]}
+                      <button
+                        onClick={() =>
+                          onUpdate({
+                            browseDurationOptions: durationOptions.filter((d) => d !== sec),
+                          })
+                        }
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                min={1}
+                placeholder="e.g. 5"
+                value={newDurValue}
+                onChange={(e) => setNewDurValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const val = parseInt(newDurValue);
+                    if (!val || val <= 0) return;
+                    const seconds = timerToSeconds(val, newDurUnit);
+                    if (!durationOptions.includes(seconds)) {
+                      onUpdate({
+                        browseDurationOptions: [...durationOptions, seconds].sort((a, b) => a - b),
+                      });
+                    }
+                    setNewDurValue("");
+                  }
+                }}
+                className="text-xs h-7 w-14 text-center rounded-lg"
+              />
+              <UnitPicker
+                value={newDurUnit}
+                options={TIMER_UNITS}
+                onChange={(unit) => setNewDurUnit(unit)}
+              />
+              <button
+                onClick={() => {
+                  const val = parseInt(newDurValue);
+                  if (!val || val <= 0) return;
+                  const seconds = timerToSeconds(val, newDurUnit);
+                  if (!durationOptions.includes(seconds)) {
+                    onUpdate({
+                      browseDurationOptions: [...durationOptions, seconds].sort((a, b) => a - b),
+                    });
+                  }
+                  setNewDurValue("");
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1"
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+            {durationOptions.length === 0 && (
+              <p className="text-[10px] text-muted-foreground">
+                Add durations the user can choose from when requesting access.
+                {rule.browseSeconds ? ` Falls back to ${secondsToTimer(rule.browseSeconds).value}${
+                  { s: "s", m: " min", h: " hr" }[secondsToTimer(rule.browseSeconds).unit]
+                } if none are set.` : ""}
+              </p>
+            )}
+          </div>
+          </>
         );
       })()}
     </div>

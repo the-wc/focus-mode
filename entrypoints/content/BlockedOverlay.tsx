@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TimerPrompt } from "./TimerPrompt";
+import { secondsToTimer, type TimerUnit } from "@/lib/storage";
+
+function formatDuration(seconds: number): string {
+  const { value, unit } = secondsToTimer(seconds);
+  const labels: Record<TimerUnit, string> = { s: "sec", m: "min", h: "hr" };
+  return `${value} ${labels[unit]}`;
+}
 
 export function BlockedOverlay({
   hostname,
@@ -9,6 +16,7 @@ export function BlockedOverlay({
   sessionsExhausted,
   sessionsUsed,
   sessionsLimit,
+  browseDurationOptions,
   onDismiss,
 }: {
   hostname: string;
@@ -17,9 +25,26 @@ export function BlockedOverlay({
   sessionsExhausted: boolean;
   sessionsUsed: number;
   sessionsLimit: number;
-  onDismiss: () => void;
+  browseDurationOptions?: number[];
+  onDismiss: (chosenBrowseSeconds?: number) => void;
 }) {
-  const [phase, setPhase] = useState<"blocked" | "timer">("blocked");
+  const [phase, setPhase] = useState<"blocked" | "pick-duration" | "timer">("blocked");
+  const [chosenDuration, setChosenDuration] = useState<number | undefined>();
+
+  const hasDurationOptions = browseDurationOptions && browseDurationOptions.length > 0;
+
+  function handleRequestAccess() {
+    if (hasDurationOptions) {
+      setPhase("pick-duration");
+    } else {
+      setPhase("timer");
+    }
+  }
+
+  function handlePickDuration(seconds: number) {
+    setChosenDuration(seconds);
+    setPhase("timer");
+  }
 
   return (
     <div className="h-full w-full flex items-center justify-center bg-background text-foreground font-sans">
@@ -53,7 +78,7 @@ export function BlockedOverlay({
             </p>
           </div>
           {canRequestAccess && (
-            <Button variant="outline" size="sm" onClick={() => setPhase("timer")}>
+            <Button variant="outline" size="sm" onClick={handleRequestAccess}>
               Request access
             </Button>
           )}
@@ -68,8 +93,39 @@ export function BlockedOverlay({
             </p>
           )}
         </div>
+      ) : phase === "pick-duration" ? (
+        <div className="flex flex-col items-center gap-6 w-full max-w-xs">
+          <div className="text-center space-y-1.5">
+            <h1 className="text-lg font-semibold tracking-tight">
+              How long do you need?
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Choose a session duration for{" "}
+              <span className="font-medium text-foreground">{hostname}</span>
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 w-full">
+            {browseDurationOptions!.map((seconds) => (
+              <Button
+                key={seconds}
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => handlePickDuration(seconds)}
+              >
+                {formatDuration(seconds)}
+              </Button>
+            ))}
+          </div>
+          <button
+            onClick={() => setPhase("blocked")}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Back
+          </button>
+        </div>
       ) : (
-        <TimerPrompt timerSeconds={timerSeconds} onComplete={onDismiss} />
+        <TimerPrompt timerSeconds={timerSeconds} onComplete={() => onDismiss(chosenDuration)} />
       )}
     </div>
   );
