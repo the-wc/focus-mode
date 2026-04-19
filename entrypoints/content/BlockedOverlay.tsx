@@ -9,6 +9,12 @@ function formatDuration(seconds: number): string {
   return `${value} ${labels[unit]}`;
 }
 
+function secondsUntilNextDay(): number {
+  const now = new Date();
+  const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return Math.max(1, Math.floor((nextDay.getTime() - now.getTime()) / 1000));
+}
+
 export function BlockedOverlay({
   hostname,
   timerSeconds,
@@ -46,6 +52,11 @@ export function BlockedOverlay({
     setPhase("timer");
   }
 
+  function handlePauseForDay() {
+    setChosenDuration(secondsUntilNextDay());
+    setPhase("timer");
+  }
+
   return (
     <div className="h-full w-full flex items-center justify-center bg-background text-foreground font-sans">
       {phase === "blocked" ? (
@@ -78,9 +89,17 @@ export function BlockedOverlay({
             </p>
           </div>
           {canRequestAccess && (
-            <Button variant="outline" size="sm" onClick={handleRequestAccess}>
-              Request access
-            </Button>
+            <div className="flex flex-col items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleRequestAccess}>
+                Request access
+              </Button>
+              <button
+                onClick={handlePauseForDay}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Pause for day
+              </button>
+            </div>
           )}
           {sessionsExhausted && (
             <p className="text-xs text-muted-foreground">
@@ -116,6 +135,14 @@ export function BlockedOverlay({
                 {formatDuration(seconds)}
               </Button>
             ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handlePauseForDay}
+            >
+              Pause for day
+            </Button>
           </div>
           <button
             onClick={() => setPhase("blocked")}
