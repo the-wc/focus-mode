@@ -1,1 +1,47 @@
 @import "@/assets/tailwind.css";
+
+/*
+ * Shadow DOM isolates selectors, but NOT `rem` units: a `rem` always resolves
+ * against the top-level document's <html> font-size, crossing the shadow
+ * boundary. Sites that set a custom `html { font-size }` (e.g. LinkedIn) would
+ * therefore shrink/grow our overlay's text and spacing.
+ *
+ * Fix: pin the shadow host to a fixed font-size and redefine Tailwind v4's
+ * rem-based scale in `em`, which resolves against this fixed host size. Tailwind
+ * emits its theme vars on `:root, :host`, so overriding them on `:host` (later
+ * in the cascade) reliably wins inside the shadow tree.
+ */
+:host {
+  font-size: 16px;
+
+  /* spacing scale (gap-*, p-*, w-*, h-*, etc.) */
+  --spacing: 0.25em;
+
+  /* font-size scale (text-*) — line-heights are unitless ratios, left as-is */
+  --text-xs: 0.75em;
+  --text-sm: 0.875em;
+  --text-base: 1em;
+  --text-lg: 1.125em;
+  --text-xl: 1.25em;
+  --text-2xl: 1.5em;
+  --text-3xl: 1.875em;
+  --text-4xl: 2.25em;
+  --text-5xl: 3em;
+  --text-6xl: 3.75em;
+  --text-7xl: 4.5em;
+  --text-8xl: 6em;
+  --text-9xl: 8em;
+
+  /* border radius (rounded-*) */
+  --radius: 0.625em;
+
+  /* container/max-width scale (max-w-*) */
+  --container-3xs: 16em;
+  --container-2xs: 18em;
+  --container-xs: 20em;
+  --container-sm: 24em;
+  --container-md: 28em;
+  --container-lg: 32em;
+  --container-xl: 36em;
+  --container-2xl: 42em;
+}
