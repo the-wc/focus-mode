@@ -90,7 +90,7 @@ export function BlockedOverlay({
           </div>
           {canRequestAccess && (
             <div className="flex flex-col items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleRequestAccess}>
+              <Button variant="outline" onClick={handleRequestAccess}>
                 Request access
               </Button>
               <button
@@ -128,7 +128,6 @@ export function BlockedOverlay({
               <Button
                 key={seconds}
                 variant="outline"
-                size="sm"
                 className="w-full"
                 onClick={() => handlePickDuration(seconds)}
               >
@@ -137,7 +136,6 @@ export function BlockedOverlay({
             ))}
             <Button
               variant="outline"
-              size="sm"
               className="w-full"
               onClick={handlePauseForDay}
             >

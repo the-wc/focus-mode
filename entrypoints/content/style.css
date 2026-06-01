@@ -45,3 +45,30 @@
   --container-xl: 36em;
   --container-2xl: 42em;
 }
+
+/*
+ * Inheritable text/font properties cross the shadow boundary at :host
+ * (font-family, color, line-height, letter-spacing, etc. cascade from the
+ * host page's <body> into our overlay). Tailwind's preflight resets these
+ * on `html, :host, body` but the host page's value still wins via inheritance
+ * on sites like LinkedIn/X that set custom fonts on body. Pin them here so
+ * the overlay always renders with our intended defaults; Tailwind utilities
+ * on descendants override as usual.
+ */
+:host {
+  font-family: "Geist Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-variant: normal;
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  font-stretch: normal;
+  letter-spacing: normal;
+  word-spacing: normal;
+  line-height: 1.5;
+  text-align: start;
+  text-transform: none;
+  text-indent: 0;
+  text-shadow: none;
+  color: initial;
+}
