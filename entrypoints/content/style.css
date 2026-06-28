@@ -72,3 +72,7 @@
   text-shadow: none;
   color: initial;
 }
+
+button:not(:disabled) {
+  cursor: pointer;
+}

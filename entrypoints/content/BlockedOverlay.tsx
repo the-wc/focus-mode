@@ -15,6 +15,13 @@ function secondsUntilNextDay(): number {
   return Math.max(1, Math.floor((nextDay.getTime() - now.getTime()) / 1000));
 }
 
+// Bigger hit areas + a hover lift so the actions read as clickable. Overlay-only;
+// the shared Button stays compact for the dashboard/popup.
+const primaryBtn =
+  "h-11 px-6 text-sm font-medium shadow-sm hover:shadow-md hover:-translate-y-px transition-all";
+const optionBtn =
+  "h-11 w-full px-4 text-sm shadow-xs hover:bg-muted hover:border-foreground/25 hover:shadow-sm hover:-translate-y-px transition-all";
+
 export function BlockedOverlay({
   hostname,
   timerSeconds,
@@ -89,17 +96,9 @@ export function BlockedOverlay({
             </p>
           </div>
           {canRequestAccess && (
-            <div className="flex flex-col items-center gap-2">
-              <Button variant="outline" onClick={handleRequestAccess}>
-                Request access
-              </Button>
-              <button
-                onClick={handlePauseForDay}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Pause for day
-              </button>
-            </div>
+            <Button className={primaryBtn} onClick={handleRequestAccess}>
+              Request access
+            </Button>
           )}
           {sessionsExhausted && (
             <p className="text-xs text-muted-foreground">
@@ -123,12 +122,12 @@ export function BlockedOverlay({
               <span className="font-medium text-foreground">{hostname}</span>
             </p>
           </div>
-          <div className="flex flex-col gap-2 w-full">
+          <div className="flex flex-col gap-2.5 w-full">
             {browseDurationOptions!.map((seconds) => (
               <Button
                 key={seconds}
                 variant="outline"
-                className="w-full"
+                className={optionBtn}
                 onClick={() => handlePickDuration(seconds)}
               >
                 {formatDuration(seconds)}
@@ -136,7 +135,7 @@ export function BlockedOverlay({
             ))}
             <Button
               variant="outline"
-              className="w-full"
+              className={optionBtn}
               onClick={handlePauseForDay}
             >
               Pause for day

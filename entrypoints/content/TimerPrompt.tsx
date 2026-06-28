@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getRandomPrompt } from "@/lib/prompts";
+import { getRandomPrompt, checkResponse } from "@/lib/prompts";
 
 function formatTime(
   secondsLeft: number,
@@ -54,7 +54,8 @@ export function TimerPrompt({
   }, []);
 
   const progress = ((timerSeconds - secondsLeft) / timerSeconds) * 100;
-  const canProceed = secondsLeft === 0 && response.trim().length > 0;
+  const check = checkResponse(response);
+  const canProceed = secondsLeft === 0 && check.ok;
   const time = formatTime(secondsLeft, timerSeconds);
 
   // Scale the ring size based on format
@@ -119,12 +120,16 @@ export function TimerPrompt({
       </div>
 
       {/* Proceed */}
-      <Button size="sm" disabled={!canProceed} onClick={onComplete}>
+      <Button
+        disabled={!canProceed}
+        onClick={onComplete}
+        className="h-11 px-8 text-sm font-medium shadow-sm transition-all enabled:hover:shadow-md enabled:hover:-translate-y-px"
+      >
         {secondsLeft > 0
           ? `Wait ${time.display}${time.suffix ?? ""}`
-          : response.trim().length === 0
-            ? "Answer to continue"
-            : "Continue to site"}
+          : check.ok
+            ? "Continue to site"
+            : check.reason}
       </Button>
     </div>
   );

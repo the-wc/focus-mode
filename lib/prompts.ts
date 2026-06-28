@@ -13,6 +13,26 @@ export const defaultPrompts = [
   "What matters most to you right now?",
 ];
 
+export const MIN_RESPONSE_LENGTH = 20;
+
+// Lazy genuineness heuristic: catch keyboard-mashing / one-word dodges, not an essay grader.
+// ponytail: heuristic, swap for an LLM check if people game it.
+export function checkResponse(text: string): { ok: boolean; reason?: string } {
+  const trimmed = text.trim();
+  if (trimmed.length < MIN_RESPONSE_LENGTH) {
+    return { ok: false, reason: `At least ${MIN_RESPONSE_LENGTH} characters` };
+  }
+  if (trimmed.split(/\s+/).length < 3) {
+    return { ok: false, reason: "Write a full sentence" };
+  }
+  const letters = trimmed.toLowerCase().replace(/[^a-z]/g, "");
+  const vowels = (letters.match(/[aeiou]/g) ?? []).length;
+  if (letters.length === 0 || vowels / letters.length < 0.2 || new Set(letters).size < 5) {
+    return { ok: false, reason: "Use real words" };
+  }
+  return { ok: true };
+}
+
 export async function getRandomPrompt(): Promise<string> {
   const config = await promptConfigStorage.getValue();
   const pool: string[] = [];
