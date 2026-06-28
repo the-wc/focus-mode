@@ -76,3 +76,97 @@
 button:not(:disabled) {
   cursor: pointer;
 }
+
+/* ── Blocked overlay: retro-utilitarian control panel ──────────────────
+ * Equipment-panel look: ivory enamel ground, an oxide-orange signal lamp,
+ * hairline rules, sharp corners, monospace readouts. Scoped to the content
+ * overlay (.ov) only — the dashboard/popup keep the default theme.
+ */
+.ov {
+  --ov-ground: #e6e1d5;
+  --ov-panel: #efeadf;
+  --ov-ink: #211e19;
+  --ov-dim: #6e675a;
+  --ov-rule: #cbc4b4;
+  --ov-signal: #3b6396;
+  --ov-signal-ink: #f1ede3;
+}
+
+/* Mono is reserved for machine readouts (labels, counters, countdown); the rest
+ * of the overlay inherits the humanist sans from :host. */
+.ov-mono {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+.dark .ov {
+  --ov-ground: #16140f;
+  --ov-panel: #201d17;
+  --ov-ink: #e8e2d4;
+  --ov-dim: #8a8273;
+  --ov-rule: #35312a;
+  --ov-signal: #6c9bd2;
+  --ov-signal-ink: #16140f;
+}
+
+.ov-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.75em;
+  padding: 0 1.25em;
+  border: 1px solid var(--ov-rule);
+  border-radius: 5px;
+  background: var(--ov-panel);
+  color: var(--ov-ink);
+  font: inherit;
+  font-size: 0.8125em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.ov-btn:hover:not(:disabled) {
+  background: var(--ov-ink);
+  color: var(--ov-ground);
+  border-color: var(--ov-ink);
+}
+.ov-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.ov-btn:focus-visible {
+  outline: 2px solid var(--ov-signal);
+  outline-offset: 2px;
+}
+.ov-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ov-btn-primary {
+  background: var(--ov-signal);
+  color: var(--ov-signal-ink);
+  border-color: var(--ov-signal);
+}
+
+.ov-field {
+  width: 100%;
+  background: var(--ov-panel);
+  border: 1px solid var(--ov-rule);
+  border-radius: 5px;
+  color: var(--ov-ink);
+  font: inherit;
+  font-size: 0.8125em;
+  line-height: 1.6;
+  padding: 0.75em;
+  resize: none;
+  outline: none;
+}
+.ov-field::placeholder {
+  color: var(--ov-dim);
+}
+.ov-field:focus {
+  border-color: var(--ov-signal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-btn {
+    transition: none;
+  }
+}

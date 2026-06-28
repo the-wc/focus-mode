@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { TimerPrompt } from "./TimerPrompt";
 import { secondsToTimer, type TimerUnit } from "@/lib/storage";
 
@@ -15,12 +14,36 @@ function secondsUntilNextDay(): number {
   return Math.max(1, Math.floor((nextDay.getTime() - now.getTime()) / 1000));
 }
 
-// Bigger hit areas + a hover lift so the actions read as clickable. Overlay-only;
-// the shared Button stays compact for the dashboard/popup.
-const primaryBtn =
-  "h-11 px-6 text-sm font-medium shadow-sm hover:shadow-md hover:-translate-y-px transition-all";
-const optionBtn =
-  "h-11 w-full px-4 text-sm shadow-xs hover:bg-muted hover:border-foreground/25 hover:shadow-sm hover:-translate-y-px transition-all";
+// Shared retro-panel classes (see .ov-* in style.css).
+const panel =
+  "w-full max-w-sm overflow-hidden rounded-[6px] border border-[var(--ov-rule)]";
+const statusStrip =
+  "flex items-center px-3.5 py-2.5 border-b border-[var(--ov-rule)]";
+const eyebrow = "ov-mono text-[0.6875em] tracking-[0.18em] uppercase text-[var(--ov-dim)]";
+
+// Remaining sessions as filled pips, spent ones hollow (GBC-style charge markers).
+function SessionPips({ used, limit }: { used: number; limit: number }) {
+  const label = `${limit - used} of ${limit} sessions left today`;
+  return (
+    <div
+      className="flex items-center gap-1"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      {Array.from({ length: limit }, (_, i) => (
+        <span
+          key={i}
+          className={
+            i < limit - used
+              ? "h-1.5 w-1.5 rounded-full bg-[var(--ov-signal)]"
+              : "h-1.5 w-1.5 rounded-full border border-[var(--ov-dim)]"
+          }
+        />
+      ))}
+    </div>
+  );
+}
 
 export function BlockedOverlay({
   hostname,
@@ -65,89 +88,75 @@ export function BlockedOverlay({
   }
 
   return (
-    <div className="h-full w-full flex items-center justify-center bg-background text-foreground font-sans">
+    <div className="ov h-full w-full flex items-center justify-center bg-[var(--ov-ground)] text-[var(--ov-ink)] p-6">
       {phase === "blocked" ? (
-        <div className="flex flex-col items-center gap-6">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-muted-foreground"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="m4.9 4.9 14.2 14.2" />
-            </svg>
-          </div>
-          <div className="text-center space-y-1.5">
-            <h1 className="text-xl font-semibold tracking-tight">
-              Site blocked
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              You blocked{" "}
-              <span className="font-medium text-foreground">{hostname}</span> to
-              stay focused.
-            </p>
-          </div>
-          {canRequestAccess && (
-            <Button className={primaryBtn} onClick={handleRequestAccess}>
-              Request access
-            </Button>
-          )}
-          {sessionsExhausted && (
-            <p className="text-xs text-muted-foreground">
-              You've already used all your sessions for this site.
-            </p>
-          )}
+        <section className={panel}>
           {sessionsLimit > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Sessions used: {sessionsUsed} / {sessionsLimit}
-            </p>
+            <header className={statusStrip}>
+              <SessionPips used={sessionsUsed} limit={sessionsLimit} />
+            </header>
           )}
-        </div>
+          <div className="flex flex-col gap-6 p-7">
+            <div className="space-y-2">
+              <p className={eyebrow}>Blocked site</p>
+              <h1 className="text-2xl font-medium tracking-tight leading-tight break-all">
+                {hostname}
+              </h1>
+              <p className="text-[0.8125em] leading-relaxed text-[var(--ov-dim)]">
+                Locked while you stay focused.
+              </p>
+            </div>
+
+            {sessionsExhausted && (
+              <p className="text-[0.8125em] text-[var(--ov-dim)]">
+                No sessions left for this site today.
+              </p>
+            )}
+
+            {canRequestAccess && (
+              <button className="ov-btn ov-btn-primary" onClick={handleRequestAccess}>
+                Request access
+              </button>
+            )}
+          </div>
+        </section>
       ) : phase === "pick-duration" ? (
-        <div className="flex flex-col items-center gap-6 w-full max-w-xs">
-          <div className="text-center space-y-1.5">
-            <h1 className="text-lg font-semibold tracking-tight">
-              How long do you need?
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Choose a session duration for{" "}
-              <span className="font-medium text-foreground">{hostname}</span>
-            </p>
-          </div>
-          <div className="flex flex-col gap-2.5 w-full">
-            {browseDurationOptions!.map((seconds) => (
-              <Button
-                key={seconds}
-                variant="outline"
-                className={optionBtn}
-                onClick={() => handlePickDuration(seconds)}
-              >
-                {formatDuration(seconds)}
-              </Button>
-            ))}
-            <Button
-              variant="outline"
-              className={optionBtn}
-              onClick={handlePauseForDay}
+        <section className={panel}>
+          {sessionsLimit > 0 && (
+            <header className={statusStrip}>
+              <SessionPips used={sessionsUsed} limit={sessionsLimit} />
+            </header>
+          )}
+          <div className="flex flex-col gap-6 p-7">
+            <div className="space-y-2">
+              <p className={eyebrow}>Session request</p>
+              <h1 className="text-xl font-medium tracking-tight">How long do you need?</h1>
+              <p className="text-[0.8125em] text-[var(--ov-dim)] break-all">For {hostname}</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {browseDurationOptions!.map((seconds) => (
+                <button
+                  key={seconds}
+                  className="ov-btn"
+                  onClick={() => handlePickDuration(seconds)}
+                >
+                  {formatDuration(seconds)}
+                </button>
+              ))}
+              <button className="ov-btn" onClick={handlePauseForDay}>
+                Pause for day
+              </button>
+            </div>
+
+            <button
+              onClick={() => setPhase("blocked")}
+              className="self-start text-[0.75em] tracking-[0.12em] uppercase text-[var(--ov-dim)] hover:text-[var(--ov-ink)] transition-colors"
             >
-              Pause for day
-            </Button>
+              ‹ Back
+            </button>
           </div>
-          <button
-            onClick={() => setPhase("blocked")}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Back
-          </button>
-        </div>
+        </section>
       ) : (
         <TimerPrompt timerSeconds={timerSeconds} onComplete={() => onDismiss(chosenDuration)} />
       )}

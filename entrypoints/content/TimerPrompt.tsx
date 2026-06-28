@@ -1,28 +1,19 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { getRandomPrompt, checkResponse } from "@/lib/prompts";
 
-function formatTime(
-  secondsLeft: number,
-  totalSeconds: number,
-): { display: string; suffix?: string } {
+function formatTime(secondsLeft: number, totalSeconds: number): string {
   if (totalSeconds < 60) {
-    return { display: String(secondsLeft) };
+    return String(secondsLeft);
   }
   if (totalSeconds < 3600) {
-    // MM:SS
     const m = Math.floor(secondsLeft / 60);
     const s = secondsLeft % 60;
-    return { display: `${m}:${String(s).padStart(2, "0")}` };
+    return `${m}:${String(s).padStart(2, "0")}`;
   }
-  // HH:MM:SS
   const h = Math.floor(secondsLeft / 3600);
   const m = Math.floor((secondsLeft % 3600) / 60);
   const s = secondsLeft % 60;
-  return {
-    display: `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
-  };
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 export function TimerPrompt({
@@ -56,81 +47,49 @@ export function TimerPrompt({
   const progress = ((timerSeconds - secondsLeft) / timerSeconds) * 100;
   const check = checkResponse(response);
   const canProceed = secondsLeft === 0 && check.ok;
-  const time = formatTime(secondsLeft, timerSeconds);
-
-  // Scale the ring size based on format
-  const isLong = timerSeconds >= 3600;
-  const ringSize = isLong ? 100 : timerSeconds >= 60 ? 88 : 80;
-  const radius = ringSize * 0.45;
+  const display = formatTime(secondsLeft, timerSeconds);
 
   return (
-    <div className="flex flex-col items-center gap-8 w-full max-w-sm">
-      {/* Circular timer */}
-      <div className="relative" style={{ width: ringSize, height: ringSize }}>
-        <svg
-          className="-rotate-90"
-          style={{ width: ringSize, height: ringSize }}
-          viewBox={`0 0 ${ringSize} ${ringSize}`}
-        >
-          <circle
-            cx={ringSize / 2}
-            cy={ringSize / 2}
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="text-muted"
-          />
-          <circle
-            cx={ringSize / 2}
-            cy={ringSize / 2}
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeDasharray={2 * Math.PI * radius}
-            strokeDashoffset={2 * Math.PI * radius * (1 - progress / 100)}
-            strokeLinecap="round"
-            className="text-foreground transition-all duration-1000 ease-linear"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-medium tabular-nums" style={{ fontSize: isLong ? 14 : timerSeconds >= 60 ? 16 : 18 }}>
-            {time.display}
-          </span>
-          {time.suffix && (
-            <span className="text-xs text-muted-foreground ml-0.5">
-              {time.suffix}
-            </span>
-          )}
+    <section className="w-full max-w-sm overflow-hidden rounded-[6px] border border-[var(--ov-rule)]">
+      <div className="flex flex-col gap-6 p-7">
+        {/* Countdown readout */}
+        <div className="space-y-3">
+          <p className="ov-mono text-[0.6875em] tracking-[0.18em] uppercase text-[var(--ov-dim)]">
+            {secondsLeft > 0 ? "Unlock in" : "Unlocked"}
+          </p>
+          <div className="ov-mono text-4xl font-medium tabular-nums tracking-tight leading-none">
+            {display}
+          </div>
+          <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--ov-rule)]">
+            <div
+              className="h-full rounded-full bg-[var(--ov-signal)] transition-all duration-1000 ease-linear"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-      </div>
 
-      {/* Prompt */}
-      <div className="w-full space-y-3 text-center">
-        <p className="text-sm text-muted-foreground">
-          {prompt || "Loading..."}
-        </p>
-        <Textarea
-          placeholder="Type your response..."
-          value={response}
-          onChange={(e) => setResponse(e.target.value)}
-          className="resize-none min-h-[80px] text-sm text-left"
-        />
-      </div>
+        {/* Reflection */}
+        <div className="space-y-2">
+          <p className="ov-mono text-[0.6875em] tracking-[0.18em] uppercase text-[var(--ov-dim)]">
+            Reflection
+          </p>
+          <p className="text-[0.8125em] leading-relaxed">{prompt || "…"}</p>
+          <textarea
+            placeholder="Type your response…"
+            value={response}
+            onChange={(e) => setResponse(e.target.value)}
+            className="ov-field min-h-[88px]"
+          />
+        </div>
 
-      {/* Proceed */}
-      <Button
-        disabled={!canProceed}
-        onClick={onComplete}
-        className="h-11 px-8 text-sm font-medium shadow-sm transition-all enabled:hover:shadow-md enabled:hover:-translate-y-px"
-      >
-        {secondsLeft > 0
-          ? `Wait ${time.display}${time.suffix ?? ""}`
-          : check.ok
-            ? "Continue to site"
-            : check.reason}
-      </Button>
-    </div>
+        <button className="ov-btn ov-btn-primary" disabled={!canProceed} onClick={onComplete}>
+          {secondsLeft > 0
+            ? `Wait ${display}`
+            : check.ok
+              ? "Continue to site"
+              : check.reason}
+        </button>
+      </div>
+    </section>
   );
 }
